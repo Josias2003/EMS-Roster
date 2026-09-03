@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 from pydantic import BaseModel
-import io, os, json
+import io, os, json, tempfile
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -54,7 +54,11 @@ app.include_router(exceptions_router)
 any_role = require_role("admin", "call_center_tl", "drivers_manager", "phtl")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(os.path.dirname(BASE_DIR), "exports")
+# The OS temp dir (not a folder next to the app code) so this works on a
+# read-only deployment filesystem too (Vercel's function bundle is
+# read-only except /tmp) — same call resolves to a normal writable temp
+# folder locally and in Docker, no environment-specific branching needed.
+OUTPUT_DIR = os.path.join(tempfile.gettempdir(), "ems_roster_exports")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
