@@ -1225,7 +1225,7 @@ def _quality_score(fairness_terms_values, driver_gaps_count, driver_slots_total,
 
 
 def generate_roster(employees, stations, ambulances, leaves, start_date, end_date,
-                     time_limit_seconds=1200, starting_hours=None, boundary_state=None, scope="all",
+                     time_limit_seconds=400, starting_hours=None, boundary_state=None, scope="all",
                      middle_site_codes=None, regulation_facilities=None, call_center_committed=None):
     """
     time_limit_seconds is a PER-ATTEMPT budget — see GENERATE_ROSTER_ATTEMPTS
