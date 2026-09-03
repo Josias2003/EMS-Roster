@@ -1,0 +1,29 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Generated exports (roster spreadsheets contain real employee data)
+exports/
+test_export.xlsx
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.venv-1/
+venv/
+*.egg-info/
+
+# OS
+.DS_Store
+
+# Local tooling (machine-specific, not project config)
+.claude/
+.vscode/

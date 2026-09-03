@@ -1,0 +1,55 @@
+services:
+  # Legacy Postgres — kept running only until the MySQL migration below is
+  # verified against real data; safe to remove once that's confirmed.
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ems
+      POSTGRES_PASSWORD: ems
+      POSTGRES_DB: ems_roster
+    ports:
+      - "5433:5432"   # 5432 is taken by a native Postgres install on dev machines — mapped to 5433 on the host
+    volumes:
+      - ems_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ems -d ems_roster"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ems-root-pw
+      MYSQL_USER: ems
+      MYSQL_PASSWORD: ems
+      MYSQL_DATABASE: ems_roster
+    ports:
+      - "3307:3306"   # 3306 is taken by a native MySQL install on dev machines — mapped to 3307 on the host
+    volumes:
+      - ems_mysqldata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pems-root-pw"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql+pymysql://ems:ems@mysql:3306/ems_roster
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./exports:/app/exports
+
+volumes:
+  ems_pgdata:
+  ems_mysqldata:
