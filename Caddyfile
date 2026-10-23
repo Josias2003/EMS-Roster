@@ -1,0 +1,12 @@
+# SITE_ADDRESS is your hostname (e.g. samu-roster.duckdns.org) — Caddy then
+# obtains and renews the HTTPS certificate automatically. Long timeouts so a
+# slow request is never cut off at the proxy (generation itself is a
+# background job, so requests stay short).
+{$SITE_ADDRESS} {
+	encode gzip
+	reverse_proxy app:8000 {
+		transport http {
+			response_header_timeout 300s
+		}
+	}
+}

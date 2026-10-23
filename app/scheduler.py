@@ -30,11 +30,20 @@ elsewhere once their own station's needs are already met and another
 station is short. Staff flagged `floats_freely` are exempt from that penalty.
 """
 import calendar
+import os
 from datetime import date, timedelta
 from collections import defaultdict
 from ortools.sat.python import cp_model
 
 MAX_CONSECUTIVE_DAYS = 2
+
+# Solver tuning, overridable per deployment without a code change. Workers
+# default to the CPUs actually available (capped at 8): asking for 8 threads on
+# a 1-2 vCPU host just makes every thread slower. The time limits are
+# PER-ATTEMPT budgets (see GENERATE_ROSTER_ATTEMPTS).
+SOLVER_WORKERS = int(os.environ.get("SOLVER_WORKERS", min(8, os.cpu_count() or 4)))
+MEDICAL_SOLVE_SECONDS = int(os.environ.get("MEDICAL_SOLVE_SECONDS", 400))
+DRIVER_SOLVE_SECONDS = int(os.environ.get("DRIVER_SOLVE_SECONDS", 90))
 
 # Target ceiling on total-hours spread (max - min) within a single fairness
 # group — kept strictly under 10h per group request. Applied as an
@@ -592,7 +601,7 @@ def rebalance_medical_hours(assignment_rows, days, cap=SPREAD_CAP_HOURS, max_ite
 
 
 def schedule_drivers(drivers, station_ambulance_pairs, leaves, days, starting_hours=None, boundary_state=None,
-                      time_limit_seconds=90):
+                      time_limit_seconds=DRIVER_SOLVE_SECONDS):
     """
     CP-SAT allocator for the floating driver pool, one slot per active
     ambulance per shift (not per station — a station with 2 ambulances needs
@@ -784,7 +793,7 @@ def schedule_drivers(drivers, station_ambulance_pairs, leaves, days, starting_ho
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit_seconds
-    solver.parameters.num_search_workers = 8
+    solver.parameters.num_search_workers = SOLVER_WORKERS
     status = solver.Solve(model)
 
     assignments, gaps, driver_by_slot = [], [], {}
@@ -1225,7 +1234,7 @@ def _quality_score(fairness_terms_values, driver_gaps_count, driver_slots_total,
 
 
 def generate_roster(employees, stations, ambulances, leaves, start_date, end_date,
-                     time_limit_seconds=400, starting_hours=None, boundary_state=None, scope="all",
+                     time_limit_seconds=MEDICAL_SOLVE_SECONDS, starting_hours=None, boundary_state=None, scope="all",
                      middle_site_codes=None, regulation_facilities=None, call_center_committed=None):
     """
     time_limit_seconds is a PER-ATTEMPT budget — see GENERATE_ROSTER_ATTEMPTS
@@ -1814,7 +1823,7 @@ def generate_roster(employees, stations, ambulances, leaves, start_date, end_dat
     for attempt in range(GENERATE_ROSTER_ATTEMPTS):
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = time_limit_seconds
-        solver.parameters.num_search_workers = 8
+        solver.parameters.num_search_workers = SOLVER_WORKERS
         solver.parameters.random_seed = attempt + 1
         status = solver.Solve(model)
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):

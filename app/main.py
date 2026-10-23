@@ -13,7 +13,10 @@ import io, os, json, tempfile
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 
-from .database import init_db, get_session
+from fastapi.middleware.gzip import GZipMiddleware
+
+from . import jobs
+from .database import init_db, get_session, engine
 from .models import (
     Station, Employee, Leave, RosterRun, Assignment, LEAVE_CODES,
     Ambulance, CrewAssignment, CrewMember, StandbyAssignment, StandbySettings, User, Facility,
@@ -40,6 +43,7 @@ from .operational_exceptions import router as exceptions_router
 DISPATCH_OWN_REGULATION_TARGET = 2
 
 app = FastAPI(title="SAMU Fair Rostering System")
+app.add_middleware(GZipMiddleware, minimum_size=1024)  # rosters/employee lists are large JSON; the 3k-line page too
 app.include_router(auth_router)
 app.include_router(ambulances_router)
 app.include_router(crew_router)
@@ -1234,6 +1238,30 @@ def _scope_for_actor(actor: User) -> str:
     return "all"
 
 
+def _start_generation_job(run_id: int, scope: str, actor: User, action: str, summary: str, clear_first: bool) -> dict:
+    """Queues the (slow) clear + solve + persist for a run on a background
+    thread and returns at once with a job id the page can poll. Runs in its
+    own session — the request's session is closed as soon as this returns."""
+    if jobs.active_job_for_run(run_id):
+        raise HTTPException(409, "A generation is already running for this roster — wait for it to finish.")
+    actor_id = actor.id
+
+    def work() -> dict:
+        with Session(engine) as s:
+            run = s.get(RosterRun, run_id)
+            if not run:
+                raise HTTPException(404, "Roster run not found")
+            if clear_first:
+                _clear_run_generated_data(s, run_id, scope=scope)
+            result = _run_solver_and_persist(s, run, scope=scope)
+            log_activity(s, s.get(User, actor_id), action, "roster_run", run_id, summary)
+            s.commit()
+            return result
+
+    job = jobs.start_job(run_id, f"{action} #{run_id} ({scope})", work)
+    return {"job_id": job["job_id"], "run_id": run_id, "scope": scope, "status": job["status"]}
+
+
 @app.post("/api/roster/generate")
 def generate(start_date: date, end_date: date, range_type: str = "custom",
              session: Session = Depends(get_session),
@@ -1264,13 +1292,9 @@ def generate(start_date: date, end_date: date, range_type: str = "custom",
                                       f"and is {exact_match.status} — it's locked. Ask an admin if it needs "
                                       f"to be reopened before more scopes can be generated into it.")
         scope = _scope_for_actor(actor)
-        _clear_run_generated_data(session, exact_match.id, scope=scope)
-        result = _run_solver_and_persist(session, exact_match, scope=scope)
-        log_activity(session, actor, "roster.generate", "roster_run", exact_match.id,
-                     f"Generated into existing roster {exact_match.start_date.isoformat()} → "
-                     f"{exact_match.end_date.isoformat()} (scope: {scope}).")
-        session.commit()
-        return result
+        return _start_generation_job(exact_match.id, scope, actor, "roster.generate",
+                                     f"Generated into existing roster {exact_match.start_date.isoformat()} → "
+                                     f"{exact_match.end_date.isoformat()} (scope: {scope}).", clear_first=True)
 
     overlapping = session.exec(select(RosterRun).where(
         RosterRun.start_date <= end_date, RosterRun.end_date >= start_date,
@@ -1289,11 +1313,9 @@ def generate(start_date: date, end_date: date, range_type: str = "custom",
     session.commit()
     session.refresh(run)
 
-    result = _run_solver_and_persist(session, run, scope=scope)
-    log_activity(session, actor, "roster.generate", "roster_run", run.id,
-                 f"Generated roster {run.start_date.isoformat()} → {run.end_date.isoformat()} (scope: {scope}).")
-    session.commit()
-    return result
+    return _start_generation_job(run.id, scope, actor, "roster.generate",
+                                 f"Generated roster {run.start_date.isoformat()} → {run.end_date.isoformat()} "
+                                 f"(scope: {scope}).", clear_first=False)
 
 
 @app.post("/api/roster/{run_id}/regenerate")
@@ -1311,12 +1333,18 @@ def regenerate(run_id: int, session: Session = Depends(get_session),
         raise HTTPException(409, f"Only a draft roster can be regenerated (current status: {run.status}). "
                                   f"Submitted/published rosters are locked to protect what's already been reviewed.")
     scope = _scope_for_actor(actor)
-    _clear_run_generated_data(session, run_id, scope=scope)
-    result = _run_solver_and_persist(session, run, scope=scope)
-    log_activity(session, actor, "roster.regenerate", "roster_run", run.id,
-                 f"Regenerated roster {run.start_date.isoformat()} → {run.end_date.isoformat()} (scope: {scope}).")
-    session.commit()
-    return result
+    return _start_generation_job(run.id, scope, actor, "roster.regenerate",
+                                 f"Regenerated roster {run.start_date.isoformat()} → {run.end_date.isoformat()} "
+                                 f"(scope: {scope}).", clear_first=True)
+
+
+@app.get("/api/roster/jobs/{job_id}")
+def get_generation_job(job_id: str, _: User = Depends(any_role)):
+    """Poll target for a generation started by /generate or /regenerate."""
+    job = jobs.get_job(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found (the server may have restarted — check the roster list).")
+    return job
 
 
 SCOPE_ROLE_LABELS = {"drivers": "Drivers Manager", "medical": "PHTL", "dispatch": "Call Center"}

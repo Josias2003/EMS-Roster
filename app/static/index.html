@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SAMU Fair Rostering</title>
+<title>SAMU Roster</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<meta name="theme-color" content="#14181A">
 <style>
   :root{
     /* Brand — a control-room navy, not a friendly SaaS blue: cooler, deeper,
@@ -229,6 +231,132 @@
     .nav-footer{margin-top:0;margin-left:auto;border-top:none;padding:4px 8px;display:flex;align-items:center;gap:10px;}
     main{margin-left:0;padding:20px;}
   }
+
+  /* =====================================================================
+     SAMU design system — the same look as SAMU Inventory ("Chain of
+     Custody"): warm off-white ground, near-black ink, ONE blue, square 2px
+     corners, no shadows or gradients, Atkinson Hyperlegible type, a flat
+     dark rail with a white bar on the active item. Kept as one block that
+     overrides the rules above, so the two apps can share it later.
+     ===================================================================== */
+  @font-face{font-family:"Atkinson Hyperlegible Next";font-weight:400;font-display:swap;src:url(/fonts/atkinson-hyperlegible-next-latin-400-normal.woff2) format("woff2");}
+  @font-face{font-family:"Atkinson Hyperlegible Next";font-weight:600;font-display:swap;src:url(/fonts/atkinson-hyperlegible-next-latin-600-normal.woff2) format("woff2");}
+  @font-face{font-family:"Atkinson Hyperlegible Next";font-weight:700;font-display:swap;src:url(/fonts/atkinson-hyperlegible-next-latin-700-normal.woff2) format("woff2");}
+  @font-face{font-family:"Atkinson Hyperlegible Mono";font-weight:400;font-display:swap;src:url(/fonts/atkinson-hyperlegible-mono-latin-400-normal.woff2) format("woff2");}
+  @font-face{font-family:"Atkinson Hyperlegible Mono";font-weight:700;font-display:swap;src:url(/fonts/atkinson-hyperlegible-mono-latin-700-normal.woff2) format("woff2");}
+  :root{
+    --marine:#14181A; --marine-dim:#2A3033; --marine-deep:#14181A;
+    --teal:#1F4FC4; --teal-strong:#183F9E; --teal-dim:#EAF0FC;   /* "teal" is the primary action colour; now the one brand blue */
+    --amber:#8A5200; --amber-dim:#FBF1D6; --amber-strong:#6E4100;
+    --red:#B3261E; --red-dim:#FBE9E7; --red-strong:#8F1D17;
+    --ink:#14181A; --ink-dim:#4A5257; --ink-faint:#5C6266;
+    --bg:#F4F3EF; --panel:#FFFFFF; --panel-hover:#F4F3EF;
+    --line:#CFCBBF; --line-strong:#6B7176;
+    --night-bg:#14181A; --night-fg:#F4F3EF;
+    --day-bg:#EAF0FC; --day-fg:#183F9E;
+    --off-bg:#E8E6DF; --off-fg:#4A5257;
+    --event-bg:#E6F2EA; --event-fg:#1E6B3C;
+    --radius-sm:2px; --radius:2px; --radius-lg:2px;
+    --shadow-sm:none; --shadow-md:0 12px 32px -8px rgb(20 24 26 / .28);
+    --font-sans:"Atkinson Hyperlegible Next",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --font-mono:"Atkinson Hyperlegible Mono",ui-monospace,Consolas,monospace;
+    --font-display:var(--font-sans);
+  }
+  body{font-size:16px;line-height:1.5;}
+  :focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible{outline:2px solid var(--teal);outline-offset:2px;box-shadow:none;border-radius:0;}
+  input:focus, select:focus{border-color:var(--teal);box-shadow:none;}
+  .skip-link{background:var(--ink);border-radius:0;}
+
+  /* Rail */
+  nav{background:var(--ink);width:240px;padding:16px 0;}
+  .brand{padding:0 12px 16px 12px;border-bottom:1px solid #4A5257;margin-bottom:12px;gap:12px;}
+  .brand img{width:36px;height:36px;flex:none;background:#fff;padding:2px;}
+  .brand .eyebrow{display:none;}
+  .brand h1{font-size:16px;font-weight:700;text-transform:none;letter-spacing:0;line-height:1.2;}
+  .nav-section-label{color:#B3AEA0;font-size:13px;letter-spacing:.04em;padding:14px 12px 6px;}
+  button.tab{min-height:44px;padding:0 12px;font-size:16px;color:#E8E6DF;border-left:4px solid transparent;transition:background 120ms;}
+  button.tab:hover{background:#1E2325;color:#fff;}
+  button.tab.active, .nav-group.active .group-toggle{background:#2A3033;border-left-color:#fff;color:#fff;font-weight:700;}
+  .nav-group.open .group-toggle, .nav-group:hover .group-toggle{background:#1E2325;}
+  .nav-group.active .group-toggle{background:#2A3033;}
+  .nav-secondary{background:#1E2325;border-radius:0;box-shadow:var(--shadow-md);padding:4px 0;}
+  .nav-footer{padding:12px;border-top:1px solid #4A5257;}
+  .nav-footer .who{font-size:13px;color:#B3AEA0;margin-bottom:6px;}
+  .nav-footer .who b{font-size:16px;font-weight:600;color:#fff;text-transform:none;}
+  .nav-footer .who .role-pill{background:none;padding:0;border-radius:0;font-size:13px;color:#CFCBBF;letter-spacing:0;}
+  .nav-footer .btn.ghost{justify-content:flex-start;min-height:44px;padding:0;border:none;background:none;color:#fff;font-size:16px;text-decoration:underline;text-decoration-color:#B3AEA0;text-underline-offset:4px;}
+  .nav-footer .btn.ghost:hover{background:none;text-decoration-color:#fff;}
+
+  /* Page */
+  main{margin-left:240px;padding:24px 32px 60px;max-width:1408px;}
+  h2{font-size:28px;line-height:34px;font-weight:700;letter-spacing:0;margin-bottom:6px;}
+  .sub{font-size:16px;color:var(--ink-dim);}
+  .panel{border-radius:0;box-shadow:none;padding:20px;}
+  .panel h2{font-size:20px;line-height:28px;}
+  .grid-wrap, .stats-row .stat{border-radius:0;box-shadow:none;}
+  .card{border-radius:0;} .card:hover{box-shadow:none;border-color:var(--line-strong);}
+
+  /* Forms and buttons */
+  .field label{font-size:14px;text-transform:none;letter-spacing:0;font-weight:600;color:var(--ink);}
+  input,select{min-height:44px;font-size:16px;padding:8px 12px;border-radius:2px;}
+  button.btn{min-height:44px;font-size:15px;padding:0 18px;border-radius:2px;box-shadow:none;}
+  button.btn:hover{transform:none;box-shadow:none;background:var(--marine-dim);}
+  button.btn.teal:hover{background:var(--teal-strong);}
+  button.btn.ghost{color:var(--ink);border:1px solid var(--ink);}
+  button.btn.ghost:hover{background:var(--bg);border-color:var(--ink);}
+  button.btn.danger{min-height:36px;}
+  button.btn.danger:hover{background:var(--red-dim);}
+
+  /* Tables */
+  table{font-size:15px;}
+  th{font-size:13px;text-transform:none;letter-spacing:0;font-weight:700;color:var(--ink-dim);background:#E8E6DF;border-bottom:2px solid var(--ink);}
+  td{padding:10px 12px;}
+  table.roster{font-size:13px;}
+  table.roster th{background:var(--ink);color:#fff;border-bottom:1px solid var(--ink);}
+  table.roster td{width:38px;}
+  .pill, .stat-chip{border-radius:2px;font-size:13px;}
+  .legend{font-size:13px;} .swatch{border-radius:2px;}
+
+  /* Status messages */
+  .msg{border-radius:2px;font-size:15px;animation:none;}
+  .msg.ok{background:#E6F2EA;color:#1E6B3C;border-color:#B9D9C4;}
+  .msg.warn{background:var(--amber-dim);color:var(--amber-strong);border-color:#E6C870;}
+  .msg.err{background:var(--red-dim);color:var(--red-strong);border-color:#EBB8B3;}
+
+  /* Dialogs */
+  .modal-overlay{background:rgba(20,24,26,.55);}
+  .modal-panel{border-radius:0;border-top:2px solid var(--ink);}
+  .modal-head{border-bottom:1px solid var(--line);} .modal-head h3{font-size:20px;}
+  .modal-close{border-radius:0;}
+
+  /* Sign-in */
+  .login-context{background:var(--ink);}
+  .login-context .eyebrow{color:#B3AEA0;font-size:13px;}
+  .login-context h1{font-size:40px;line-height:44px;letter-spacing:0;}
+  .login-context p{color:#E8E6DF;font-size:16px;}
+  .role-cue .dot{border-radius:0;background:#fff;width:8px;height:8px;}
+  .role-cue b{font-size:16px;} .role-cue span{color:#CFCBBF;font-size:15px;}
+  .login-card{border-radius:0;box-shadow:none;border:1px solid var(--line);border-top:2px solid var(--ink);animation:none;}
+  .login-card h1{font-size:28px;line-height:34px;}
+  .login-card .logo{width:40px;height:40px;flex:none;background:#fff;padding:2px;border:1px solid var(--line);}
+
+  /* Type floor: Inventory has no text under 13px and no small-caps labels.
+     Many sizes in this page are set inline on single elements, so lift them
+     here rather than editing every one. */
+  [style*="font-size:9px"],[style*="font-size:10px"],[style*="font-size:10.5px"],[style*="font-size:11px"],
+  [style*="font-size:11.5px"],[style*="font-size:12px"],[style*="font-size:12.5px"]{font-size:13px !important;}
+  [style*="text-transform:uppercase"],.eyebrow{text-transform:none !important;letter-spacing:0 !important;}
+  table.roster, table.roster td, table.roster th{font-size:13px !important;}
+
+  /* Calm motion: nothing slides or fades in */
+  main > h2, main > .sub, main > .panel, main > .toolbar, main > .stats-row, main .card, .grid-wrap{animation:none !important;}
+  button.tab:active .ico svg{transform:none;}
+
+  @media (max-width: 860px){
+    nav{width:auto;}
+    #nav-tabs > button.tab.active, .nav-group.active .group-toggle{border-bottom-color:#fff;border-left-color:transparent;}
+    main{margin-left:0;padding:20px 16px;}
+  }
 </style>
 </head>
 <body>
@@ -250,7 +378,7 @@
   <div class="login-panel">
     <div class="login-card">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-        <div style="width:38px;height:38px;border-radius:10px;background:var(--teal);display:flex;align-items:center;justify-content:center;flex:none;"><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg></div>
+        <img class="logo" src="/samu-logo.png" alt="">
         <div>
           <div class="eyebrow" style="font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);">RBC · SAMU</div>
           <h1 style="margin:0;">Sign in</h1>
@@ -268,11 +396,8 @@
 <div class="shell" id="app-shell" style="display:none;">
   <nav aria-label="Main">
     <div class="brand">
-      <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg></div>
-      <div>
-        <div class="eyebrow">RBC · SAMU</div>
-        <h1>Fair Rostering</h1>
-      </div>
+      <img src="/samu-logo.png" alt="">
+      <h1>SAMU Roster</h1>
     </div>
     <div id="nav-tabs"></div>
     <div id="nav-current-roster" style="padding:0 20px;"></div>
@@ -351,6 +476,21 @@ let STATE = {
   role: localStorage.getItem("ems_role"),
   username: localStorage.getItem("ems_username"),
 };
+
+// Generate/Regenerate start a background job (the solve can take minutes);
+// poll it here and resolve with the same result object the old blocking call
+// returned. onStatus(job) lets the caller show "queued" vs "solving".
+async function runGenerationJob(path, onStatus) {
+  const started = await api(path, {method:"POST"});
+  const t0 = Date.now();
+  for (;;) {
+    const job = await api(`/roster/jobs/${started.job_id}`);
+    if (onStatus) onStatus(job, Math.round((Date.now() - t0) / 1000));
+    if (job.status === "done") return job.result;
+    if (job.status === "failed") throw new Error(job.error || "Generation failed.");
+    await new Promise(r => setTimeout(r, 3000));
+  }
+}
 
 async function api(path, opts={}) {
   const headers = {"Content-Type":"application/json"};
@@ -1994,7 +2134,12 @@ async function renderGenerate(){
       resultBox.innerHTML = "";
       resultBox.appendChild(el("div", {class:"msg"}, "Solving — this can take a few minutes at real scale..."));
       try {
-        const res = await api(`/roster/generate?start_date=${start_date}&end_date=${end_date}&range_type=${rangeSel.value}`, {method:"POST"});
+        const progress = resultBox.firstChild;
+        const res = await runGenerationJob(
+          `/roster/generate?start_date=${start_date}&end_date=${end_date}&range_type=${rangeSel.value}`,
+          (job, secs) => { progress.textContent = (job.status === "queued"
+            ? "Waiting for another generation to finish..."
+            : `Solving — ${secs}s elapsed. This can take a few minutes at real scale; you can keep this page open.`); });
         STATE.currentRunId = res.run_id;
         resultBox.innerHTML = "";
         const q = res.quality || {};
@@ -2158,7 +2303,12 @@ async function loadRun(runId){
         : "All current assignments for this date range will be recomputed from scratch, replacing what's there now.";
       const ok = await showConfirm(regenMsg, {title:"Regenerate this roster?", danger:true, confirmLabel:"Regenerate"});
       if (!ok) return;
-      try { await api(`/roster/${runId}/regenerate`, {method:"POST"}); loadRun(runId); }
+      try {
+        showToast("Regenerating — this can take a few minutes...", "warn");
+        await runGenerationJob(`/roster/${runId}/regenerate`);
+        showToast("Roster regenerated.", "ok");
+        loadRun(runId);
+      }
       catch(err){ showToast(err.message, "err"); }
     }}, icon("refresh", 15), "Regenerate"));
   }

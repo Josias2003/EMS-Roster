@@ -1,0 +1,57 @@
+# Production stack for a single Linux VM (e.g. Oracle Cloud Always Free):
+#   Caddy (HTTPS, public)  ->  app (FastAPI + solver)  ->  MySQL (private)
+# Only Caddy publishes ports; the database and the app are not reachable from
+# the internet. Run with:  docker compose -f docker-compose.prod.yml up -d --build
+# Required values live in .env.production (copy .env.production.example).
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set in .env.production}
+      MYSQL_USER: ems
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set in .env.production}
+      MYSQL_DATABASE: ems_roster
+    volumes:
+      - ems_mysqldata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: production
+      JWT_SECRET: ${JWT_SECRET:?set in .env.production}
+      DATABASE_URL: mysql+pymysql://ems:${MYSQL_PASSWORD}@mysql:3306/ems_roster
+      # Solver budgets — job status is held in memory, so keep ONE uvicorn worker.
+      MEDICAL_SOLVE_SECONDS: ${MEDICAL_SOLVE_SECONDS:-300}
+      DRIVER_SOLVE_SECONDS: ${DRIVER_SOLVE_SECONDS:-90}
+      SOLVER_WORKERS: ${SOLVER_WORKERS:-4}
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set in .env.production}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  ems_mysqldata:
+  caddy_data:
+  caddy_config:
