@@ -1757,5 +1757,23 @@ def export_roster(run_id: int, session: Session = Depends(get_session), _=Depend
                          media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
+# ---------- User manuals ----------
+# One PDF per role (built by docs/manuals/build_roster_manuals.py). The file is chosen from the
+# SIGNED-IN user's role on the server, so nobody can be served another role's manual.
+MANUAL_DIR = os.path.join(BASE_DIR, "manuals")
+MANUAL_NAMES = {"admin": "Administrator", "drivers_manager": "Drivers-Manager", "phtl": "PHTL", "call_center_tl": "Call-Center-TL"}
+
+
+@app.get("/api/manual")
+def my_user_manual(actor: User = Depends(any_role)):
+    if actor.role not in MANUAL_NAMES:
+        raise HTTPException(404, "No user manual is available for your role yet.")
+    path = os.path.join(MANUAL_DIR, f"{actor.role}.pdf")
+    if not os.path.isfile(path):
+        raise HTTPException(404, "No user manual is available for your role yet.")
+    return FileResponse(path, media_type="application/pdf", content_disposition_type="inline",
+                        filename=f"SAMU-Roster-User-Manual-{MANUAL_NAMES[actor.role]}.pdf")
+
+
 # ---------- Frontend ----------
 app.mount("/", StaticFiles(directory=os.path.join(BASE_DIR, "static"), html=True), name="static")

@@ -272,6 +272,7 @@
   .nav-footer .who .role-pill{background:none;padding:0;border-radius:0;font-size:13px;color:#CFCBBF;letter-spacing:0;}
   .nav-footer .btn.ghost{justify-content:flex-start;min-height:44px;padding:0;border:none;background:none;color:#fff;font-size:16px;text-decoration:underline;text-decoration-color:#B3AEA0;text-underline-offset:4px;}
   .nav-footer .btn.ghost:hover{background:none;text-decoration-color:#fff;}
+  .nav-footer #manual-btn{margin-bottom:2px;}
 
   /* Page */
   main{margin-left:240px;padding:24px 32px 60px;max-width:1408px;}
@@ -443,6 +444,7 @@
     <div id="nav-current-roster" style="padding:0 20px;"></div>
     <div class="nav-footer">
       <div class="who"><b id="nav-username"></b><span id="nav-role" class="role-pill"></span></div>
+      <button class="btn ghost" id="manual-btn" style="width:100%;"><span id="manual-icon"></span>User manual</button>
       <button class="btn ghost" id="logout-btn" style="width:100%;"><span id="logout-icon"></span>Log out</button>
     </div>
   </nav>
@@ -694,6 +696,7 @@ function showConfirm(message, opts){
 
 // ---------- Icons (inline SVG line-icon set — no emoji, no external icon font) ----------
 const ICON_PATHS = {
+  manual: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 21.5V5.5"/><path d="M9 8h7"/>',
   dashboard: '<rect x="3" y="10" width="4" height="11" rx="1"/><rect x="10" y="5" width="4" height="16" rx="1"/><rect x="17" y="13" width="4" height="8" rx="1"/>',
   stations: '<path d="M12 21s-7-6.2-7-11.2a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.4"/>',
   employees: '<circle cx="9" cy="8" r="3.2"/><path d="M2.7 20c.4-3.4 3-6 6.3-6s5.9 2.6 6.3 6"/><circle cx="17.3" cy="9.3" r="2.4"/><path d="M15.7 14.3c2.4.5 4.2 2.6 4.6 5.7"/>',
@@ -778,6 +781,9 @@ function showApp(){
   const logoutIcon = document.getElementById("logout-icon");
   logoutIcon.innerHTML = "";
   logoutIcon.appendChild(icon("logout", 15));
+  const manualIcon = document.getElementById("manual-icon");
+  manualIcon.innerHTML = "";
+  manualIcon.appendChild(icon("manual", 15));
   document.getElementById("nav-username").textContent = STATE.username || "";
   document.getElementById("nav-role").textContent = (STATE.role || "").replace(/_/g," ");
   renderNav();
@@ -891,6 +897,26 @@ function doLogout(){
 }
 
 document.getElementById("logout-btn").addEventListener("click", doLogout);
+
+// The PDF manual for the signed-in role. It needs the bearer token, so it is fetched and opened as a
+// blob. The tab is opened first, synchronously, because phone browsers block a window opened after an await.
+async function openManual(){
+  const w = window.open("", "_blank");
+  try {
+    const res = await fetch(API + "/manual", {headers:{Authorization:"Bearer " + STATE.token}});
+    if (res.status === 401) { if (w) w.close(); doLogout(); return; }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || "The manual could not be opened.");
+    }
+    const url = URL.createObjectURL(await res.blob());
+    if (w) { w.location.href = url; } else { window.location.assign(url); }
+  } catch (err) {
+    if (w) w.close();
+    showToast(err.message, "err");
+  }
+}
+document.getElementById("manual-btn").addEventListener("click", () => { setMobileNav(false); openManual(); });
 
 document.getElementById("login-submit").addEventListener("click", async () => {
   const username = document.getElementById("login-username").value;
