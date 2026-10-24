@@ -32,3 +32,6 @@ venv/
 # Handover documents name infrastructure identifiers; keep them out of the public repo
 SAMU-Roster-*.pdf
 HANDOVER.md
+
+# Intermediate screenshots for the user manuals (only the finished PDFs are kept)
+docs/manuals/capture/out/

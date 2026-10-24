@@ -3,6 +3,7 @@
 Each manual is a list of blocks:
     ("h1", text) ("h2", text) ("p", text) ("bul", [text, ...]) ("steps", [text, ...])
     ("table", rows, widths) ("note", kind, text)        kind: tip | warn | ok
+    ("fig", image_path, title, intro, [legend step, ...])   a screenshot with numbered orange markers + matching legend
 Text may use the reportlab mini-markup (<b>, <i>) - escape a literal ampersand as &amp;.
 
 Requires reportlab (pip install reportlab). Same file is kept in both repositories.
@@ -12,8 +13,12 @@ from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.platypus import (BaseDocTemplate, CondPageBreak, Frame, KeepTogether, NextPageTemplate, PageBreak,
+import json
+import os
+
+from reportlab.platypus import (BaseDocTemplate, CondPageBreak, Frame, Image, KeepTogether, NextPageTemplate, PageBreak,
                                 PageTemplate, Paragraph, Spacer, Table, TableStyle)
+from reportlab.lib.utils import ImageReader
 
 INK = colors.HexColor("#14181A"); INK2 = colors.HexColor("#4A5257")
 BRAND = colors.HexColor("#1F4FC4"); TINT = colors.HexColor("#EAF0FC")
@@ -61,6 +66,66 @@ def _note(kind, text):
                            ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
                            ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 7)]))
     return KeepTogether([t, Spacer(1, 8)])
+
+
+MARK = colors.HexColor("#E8590C")   # the colour of the numbered markers drawn on the screenshots
+
+
+def _legend(steps, width):
+    rows = [[Paragraph(f'<font color="white"><b>{i}</b></font>', ParagraphStyle("n", parent=cell, alignment=1, leading=12)), Paragraph(t, cell)]
+            for i, t in enumerate(steps, 1)]
+    t = Table(rows, colWidths=[7 * mm, width - 7 * mm])
+    st = [("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("TOPPADDING", (0, 0), (-1, -1), 2.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
+          ("LEFTPADDING", (0, 0), (-1, -1), 3), ("RIGHTPADDING", (0, 0), (-1, -1), 4), ("LINEBELOW", (0, 0), (-1, -2), 0.3, RULE)]
+    st += [("BACKGROUND", (0, i), (0, i), MARK) for i in range(len(rows))]
+    t.setStyle(TableStyle(st))
+    return t
+
+
+def _figure(path, title, intro, steps):
+    """The screenshot (bordered) and its legend. Portrait phone shots sit beside their legend; wide shots span the page."""
+    iw, ih = ImageReader(path).getSize()
+    parts = [Paragraph(f"<b>{title}</b>", ParagraphStyle("ft", parent=body, fontSize=11, spaceAfter=2, keepWithNext=1))]
+    if intro:
+        parts.append(Paragraph(intro, ParagraphStyle("fi", parent=body, fontSize=9.5, leading=13.5, textColor=INK2, spaceAfter=4, keepWithNext=1)))
+    if ih / iw > 1.2:   # phone
+        w = 58 * mm; h = w * ih / iw
+        img = Table([[Image(path, width=w, height=h)]], colWidths=[w + 2])
+        img.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.8, INK), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                                 ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
+        side = Table([[img, _legend(steps, CW - w - 8 * mm)]], colWidths=[w + 8 * mm, CW - w - 8 * mm])
+        side.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0)]))
+        parts.append(side)
+    else:
+        h = CW * ih / iw
+        img = Table([[Image(path, width=CW, height=h)]], colWidths=[CW])
+        img.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.8, INK), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                                 ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
+        parts += [img, Spacer(1, 4), _legend(steps, CW)]
+    return KeepTogether(parts + [Spacer(1, 12)])
+
+
+def load_figures(figures_json):
+    """{(role, key): block} from the capture script's figures.json; images are resolved next to that file."""
+    base = os.path.dirname(os.path.abspath(figures_json))
+    out = {}
+    for f in json.load(open(figures_json, encoding="utf-8")):
+        path = os.path.join(base, f["file"])
+        if os.path.isfile(path):
+            out[(f["role"], f["key"])] = ("fig", path, f["title"], f.get("intro", ""), f.get("steps", []))
+    return out
+
+
+def figs(figures, role, *keys):
+    """Blocks for the named figures of a role (silently skipping any that were not captured, with a warning)."""
+    blocks = []
+    for k in keys:
+        b = figures.get((role, k)) or figures.get(("common", k))
+        if b is None:
+            print(f"  warning: no screenshot {role}/{k}")
+        else:
+            blocks.append(b)
+    return blocks
 
 
 def build_manual(path, app_name, role_title, intro, blocks, version="Version 1  -  24 October 2026"):
@@ -116,6 +181,8 @@ def build_manual(path, app_name, role_title, intro, blocks, version="Version 1  
             story += [_table(blk[1], blk[2]), Spacer(1, 9)]
         elif kind == "note":
             story.append(_note(blk[1], blk[2]))
+        elif kind == "fig":
+            story.append(_figure(blk[1], blk[2], blk[3], blk[4]))
         else:
             raise ValueError(kind)
     doc.build(story)
