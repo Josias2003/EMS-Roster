@@ -217,20 +217,6 @@
     }
   }
 
-  @media (max-width: 860px){
-    nav{position:static;width:auto;height:auto;flex-direction:row;flex-wrap:wrap;padding:12px;align-items:center;}
-    .brand{border-bottom:none;margin-bottom:0;padding:4px 8px;}
-    .nav-section-label{display:none;}
-    /* Only the primary bar's own buttons go horizontal on mobile — a
-       flyout's buttons (.nav-secondary, portaled onto body) stay a normal
-       vertical dropdown list regardless of viewport width. */
-    #nav-tabs > button.tab, .group-toggle{width:auto;border-left:none;border-bottom:3px solid transparent;padding:8px 12px;}
-    #nav-tabs > button.tab.active{border-left-color:transparent;border-bottom-color:var(--teal);}
-    .nav-group.active .group-toggle{border-left-color:transparent;border-bottom-color:var(--teal);}
-    .nav-secondary{border-radius:var(--radius);margin-top:4px;}
-    .nav-footer{margin-top:0;margin-left:auto;border-top:none;padding:4px 8px;display:flex;align-items:center;gap:10px;}
-    main{margin-left:0;padding:20px;}
-  }
 
   /* =====================================================================
      SAMU design system — the same look as SAMU Inventory ("Chain of
@@ -352,10 +338,63 @@
   main > h2, main > .sub, main > .panel, main > .toolbar, main > .stats-row, main .card, .grid-wrap{animation:none !important;}
   button.tab:active .ico svg{transform:none;}
 
+  /* ---------------------------------------------------------------------
+     Phones and small tablets (<= 860px): a compact top bar with a menu
+     button; the menu opens full screen with expandable groups (there is no
+     hover on touch). Content gets 16px gutters; tables scroll inside their
+     card instead of widening the page; forms stack; dialogs go full width.
+     --------------------------------------------------------------------- */
+  .nav-menu-btn{display:none;align-items:center;justify-content:center;width:44px;height:44px;margin-left:auto;background:none;border:none;color:#fff;cursor:pointer;flex:none;}
+  .nav-menu-btn svg{width:26px;height:26px;}
+  .skip-link{top:-80px;}
   @media (max-width: 860px){
-    nav{width:auto;}
-    #nav-tabs > button.tab.active, .nav-group.active .group-toggle{border-bottom-color:#fff;border-left-color:transparent;}
-    main{margin-left:0;padding:20px 16px;}
+    nav{position:fixed;top:0;left:0;right:0;width:auto;height:56px;padding:0;overflow:hidden;flex-direction:column;z-index:60;}
+    nav.nav-open{height:100vh;height:100dvh;overflow-y:auto;overscroll-behavior:contain;}
+    .brand{height:56px;flex:none;margin:0;padding:0 4px 0 12px;border-bottom:1px solid #4A5257;}
+    .nav-menu-btn{display:flex;}
+    #nav-tabs, #nav-current-roster, .nav-footer{display:none;}
+    nav.nav-open #nav-tabs{display:block;padding:8px 0;}
+    nav.nav-open #nav-current-roster{display:block;}
+    nav.nav-open .nav-footer{display:block;margin-top:auto;}
+    #nav-tabs > button.tab, #nav-tabs .group-toggle{width:100%;min-height:48px;padding:0 16px;border-left:4px solid transparent;border-bottom:none;}
+    #nav-tabs > button.tab.active, #nav-tabs .nav-group.active .group-toggle{border-left-color:#fff;border-bottom-color:transparent;}
+    .nav-group .chev{transition:transform 120ms;}
+    .nav-group.open .chev{transform:rotate(90deg);}
+    .nav-secondary.inline{position:static;display:none;min-width:0;background:#1E2325;box-shadow:none;padding:0;animation:none;}
+    .nav-secondary.inline.open{display:block;}
+    .nav-secondary.inline button.tab{min-height:44px;padding:0 16px 0 40px;}
+    .nav-footer .btn.ghost{min-height:48px;}
+    body.nav-locked{overflow:hidden;}
+
+    main{margin-left:0;margin-top:56px;padding:16px 16px 48px;max-width:none;}
+    h2{font-size:24px;line-height:30px;}
+    .sub{font-size:15px;}
+    .panel{padding:16px;}
+    .toolbar, .row{flex-direction:column;align-items:stretch;}
+    .row .field, .toolbar .field{min-width:0;width:100%;}
+    .row > button.btn, .toolbar > button.btn, .add-btn-row button.btn{width:100%;}
+    .add-btn-row{justify-content:stretch;}
+    .stats-row{gap:10px;} .stats-row .stat{flex:1 1 calc(50% - 10px);min-width:0;}
+    main table:not(.roster){display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    main table:not(.roster) th, main table:not(.roster) td{white-space:nowrap;}
+    /* Data tables become labelled cards so every value and every action button is on screen. */
+    main table.stackable, main table.stackable tbody{display:block;overflow:visible;max-width:100%;}
+    main table.stackable .stack-head{display:none;}
+    main table.stackable tr{display:block;background:var(--panel);border:1px solid var(--line);border-top:2px solid var(--ink);margin-bottom:10px;padding:4px 0;}
+    main table.stackable tbody tr:hover td{background:none;}
+    main table.stackable td{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:7px 12px;border:none;white-space:normal;text-align:right;}
+    main table.stackable td::before{content:attr(data-label);flex:none;font-weight:600;color:var(--ink-dim);text-align:left;}
+    main table.stackable td[data-label=""]{justify-content:flex-start;flex-wrap:wrap;text-align:left;}
+    main table.stackable td[data-label=""]::before{display:none;}
+    main table.stackable td:empty{display:none;}
+    .grid-wrap{max-width:100%;}
+    table.roster th.name-col, table.roster td.name-col{min-width:120px;padding:7px 8px;}
+    .modal-overlay{padding:8px;align-items:flex-end;}
+    .modal-panel{max-width:none;max-height:92vh;padding:16px;}
+    .modal-panel .field{flex:1 1 100%;}
+    .login-panel{padding:16px;align-items:flex-start;padding-top:48px;}
+    .login-card{padding:24px;}
+    .legend{gap:10px 16px;}
   }
 </style>
 </head>
@@ -398,6 +437,7 @@
     <div class="brand">
       <img src="/samu-logo.png" alt="">
       <h1>SAMU Roster</h1>
+      <button type="button" class="nav-menu-btn" id="nav-menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="nav-tabs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     </div>
     <div id="nav-tabs"></div>
     <div id="nav-current-roster" style="padding:0 20px;"></div>
@@ -760,6 +800,19 @@ function setNavFlyoutOpen(groupEl, open){
   const toggle = groupEl.querySelector(".group-toggle");
   if (toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false");
 }
+function isPhoneLayout(){ return window.matchMedia("(max-width: 860px)").matches; }
+function setMobileNav(open){
+  const nav = document.querySelector("#app-shell > nav");
+  if (!nav) return;
+  nav.classList.toggle("nav-open", open);
+  document.body.classList.toggle("nav-locked", open);
+  const btn = document.getElementById("nav-menu-btn");
+  if (btn) { btn.setAttribute("aria-expanded", open ? "true" : "false"); btn.setAttribute("aria-label", open ? "Close menu" : "Open menu"); }
+}
+document.getElementById("nav-menu-btn").addEventListener("click", () => {
+  setMobileNav(!document.querySelector("#app-shell > nav").classList.contains("nav-open"));
+});
+window.matchMedia("(max-width: 860px)").addEventListener("change", () => { setMobileNav(false); closeNavFlyouts(); });
 function closeNavFlyouts(){
   document.querySelectorAll(".nav-group.open").forEach(g => setNavFlyoutOpen(g, false));
 }
@@ -767,9 +820,15 @@ function openNavFlyout(groupEl){
   document.querySelectorAll(".nav-group.open").forEach(g => { if (g !== groupEl) setNavFlyoutOpen(g, false); });
   if (groupEl._flyout) {
     const rect = groupEl.getBoundingClientRect();
-    const isMobile = window.matchMedia("(max-width: 860px)").matches;
-    if (isMobile) { groupEl._flyout.style.left = rect.left + "px"; groupEl._flyout.style.top = rect.bottom + "px"; }
-    else { groupEl._flyout.style.left = rect.right + "px"; groupEl._flyout.style.top = rect.top + "px"; }
+    if (isPhoneLayout()) {
+      // No hover on touch: the group's pages expand inline inside the full-screen menu.
+      groupEl._flyout.classList.add("inline");
+      groupEl.appendChild(groupEl._flyout);
+    } else {
+      groupEl._flyout.classList.remove("inline");
+      if (groupEl._flyout.parentElement !== document.body) document.body.appendChild(groupEl._flyout);
+      groupEl._flyout.style.left = rect.right + "px"; groupEl._flyout.style.top = rect.top + "px";
+    }
   }
   setNavFlyoutOpen(groupEl, true);
 }
@@ -792,7 +851,7 @@ function renderNav(){
   function tabBtn(tab, extraClass){
     return el("button", {class:`tab${extraClass ? " "+extraClass : ""}`, "data-tab":tab,
       "aria-current": STATE.tab===tab ? "page" : false,
-      onclick: () => { setTab(tab); closeNavFlyouts(); }},
+      onclick: () => { setTab(tab); closeNavFlyouts(); setMobileNav(false); }},
       el("span", {class:"ico"}, icon(tab)),
       el("span", {}, TAB_LABELS[tab])
     );
@@ -3500,6 +3559,29 @@ async function updateCurrentRosterIndicator(){
       formatRunLabel(run)));
   } catch(e) { /* non-critical UI cue — never block the tab render over it */ }
 }
+
+// Phones show data tables as cards (see the <=860px CSS): each cell needs the
+// text of its column header as a label. Done for whatever is rendered into
+// #main, so the many table builders above need no changes.
+function labelTables(){
+  const main = document.getElementById("main");
+  if (!main) return;
+  main.querySelectorAll("table:not(.roster)").forEach(t => {
+    const rows = [...t.querySelectorAll("tr")];
+    const headRow = rows.find(r => r.querySelector("th"));
+    if (!headRow) return;
+    const heads = [...headRow.children].map(th => th.textContent.replace(/[\u25B2\u25BC]/g, "").trim());
+    t.classList.add("stackable");
+    headRow.classList.add("stack-head");
+    rows.forEach(tr => {
+      if (tr === headRow) return;
+      [...tr.children].forEach((td, i) => {
+        if (td.tagName === "TD" && !td.hasAttribute("data-label")) td.setAttribute("data-label", heads[i] || "");
+      });
+    });
+  });
+}
+new MutationObserver(labelTables).observe(document.getElementById("main"), {childList:true, subtree:true});
 
 function setTab(tab){
   STATE.tab = tab;
