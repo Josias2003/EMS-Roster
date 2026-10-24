@@ -1,0 +1,4 @@
+# Never rewrite line endings in binary files (a converted PDF or font is corrupt)
+*.pdf binary
+*.png binary
+*.woff2 binary
