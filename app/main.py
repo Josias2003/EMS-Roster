@@ -497,6 +497,7 @@ def create_employee(payload: EmployeeCreate, session: Session = Depends(get_sess
     session.refresh(employee)
     log_activity(session, actor, "employee.create", "employee", employee.id, f"Added employee '{employee.name}' ({employee.role}).")
     session.commit()
+    session.refresh(employee)  # the second commit expires it; without this the response body is empty
     return employee
 
 
@@ -689,7 +690,7 @@ def _starting_hours_for_month(session: Session, run_start: date, exclude_run_id:
 
 def _boundary_state_for_run(session: Session, run_start: date) -> dict:
     """
-    {employee_id: {"was_night_before": bool, "consecutive_before": int}} —
+    {employee_id: {"was_night_before": bool, "was_day_before": bool, "consecutive_before": int}} —
     what everyone was doing on the days immediately before run_start, from
     ANY roster run (not month-scoped like _starting_hours_for_month, since
     a night shift on Jan 31 still means Feb 1 must be a rest day). Feeds
@@ -711,6 +712,7 @@ def _boundary_state_for_run(session: Session, run_start: date) -> dict:
     result = {}
     for eid, day_codes in by_employee_day.items():
         was_night_before = day_codes.get(prior_day, "").startswith("N")
+        was_day_before = day_codes.get(prior_day, "").startswith("D") and is_work_shift_code(day_codes.get(prior_day))
         consec = 0
         cursor = prior_day
         for _ in range(MAX_CONSECUTIVE_DAYS):
@@ -720,7 +722,7 @@ def _boundary_state_for_run(session: Session, run_start: date) -> dict:
                 cursor -= timedelta(days=1)
             else:
                 break
-        result[eid] = {"was_night_before": was_night_before, "consecutive_before": consec}
+        result[eid] = {"was_night_before": was_night_before, "was_day_before": was_day_before, "consecutive_before": consec}
     return result
 
 
@@ -885,7 +887,8 @@ def _recompute_regulation_nurses(session: Session, run: RosterRun, nurse_pool: l
             if is_work_shift_code(a.code) and a.facility_id == facility_id:
                 committed[(a.day, "day" if a.code[0] == "D" else "night")] += 1
         reg_assignments = assign_regulation_nurses(nurse_pool, facility.dict(), committed,
-                                                     leaves_all, days, worked_assignments)
+                                                     leaves_all, days, worked_assignments,
+                                                     boundary_state=_boundary_state_for_run(session, run.start_date))
         for a in reg_assignments:
             existing = existing_row_by_key.get((a["employee_id"], a["day"]))
             if existing:
@@ -1136,7 +1139,10 @@ def _run_solver_and_persist(session: Session, run: RosterRun, scope: str = "all"
             mix_exempt = {e["id"] for e in nurse_pool if e.get("night_only") or e.get("restricted_night_shift")}
             regulation_eligible_ids = {e["id"] for e in nurse_pool if e["role"] in ("critical", "anesthesiologist")}
             rebalance_medical_hours(row_dicts, days, mix_exempt=mix_exempt,
-                                     regulation_eligible_ids=regulation_eligible_ids)
+                                     regulation_eligible_ids=regulation_eligible_ids,
+                                     boundary_state=boundary_state_all,
+                                     no_night_ids={e["id"] for e in nurse_pool if e.get("restricted_night_shift")},
+                                     no_day_ids={e["id"] for e in nurse_pool if e.get("night_only")})
             for d in row_dicts:
                 orm_row = row_by_key[(d["employee_id"], d["day"])]
                 if orm_row.code != d["code"]:

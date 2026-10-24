@@ -65,6 +65,7 @@ def create_event(payload: EventCreate, session: Session = Depends(get_session), 
     log_activity(session, user, "event.create", "event", event.id,
                  f"Created event '{event.name}' on {event.date.isoformat()} (priority {event.priority}).")
     session.commit()
+    session.refresh(event)  # the second commit expires it; without this the response body is empty
     return event
 
 

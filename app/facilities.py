@@ -59,6 +59,7 @@ def create_facility(payload: FacilityCreate, session: Session = Depends(get_sess
     log_activity(session, actor, "facility.create", "facility", facility.id,
                  f"Created facility '{facility.name}' (needs {facility.required_headcount}).")
     session.commit()
+    session.refresh(facility)  # the second commit expires it; without this the response body is empty
     return facility
 
 

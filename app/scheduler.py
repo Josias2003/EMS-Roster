@@ -179,7 +179,7 @@ def month_days(year: int, month: int):
 
 
 def _rebalance_hours(assignments, state, employee_ids, days, driver_by_slot=None,
-                      cap=SHIFT_COUNT_SPREAD_CAP, max_iterations=1500):
+                      cap=SHIFT_COUNT_SPREAD_CAP, max_iterations=1500, boundary_state=None):
     """
     Post-pass local-search rebalancing for the greedy driver/facility-staff
     allocators, ranked on SHIFT COUNT (not hours) — confirmed directly: within
@@ -229,6 +229,9 @@ def _rebalance_hours(assignments, state, employee_ids, days, driver_by_slot=None
         i = idx - 1
         while i >= 0 and is_work_shift_code(codes.get(days_sorted[i])):
             streak += 1; i -= 1
+        if i < 0:
+            # the run of worked days reaches the first day of this roster: it began before it
+            streak += (boundary_state or {}).get(eid, {}).get("consecutive_before", 0)
         i = idx + 1
         while i < len(days_sorted) and is_work_shift_code(codes.get(days_sorted[i])):
             streak += 1; i += 1
@@ -243,6 +246,10 @@ def _rebalance_hours(assignments, state, employee_ids, days, driver_by_slot=None
             prev_code = codes.get(days_sorted[idx - 1])
             if prev_code and prev_code.startswith("N") and is_work_shift_code(prev_code):
                 return False
+        elif (boundary_state or {}).get(eid, {}).get("was_night_before"):
+            return False  # worked a night on the last day of the previous roster: day one is the rest day
+        elif shift_type == "night" and (boundary_state or {}).get(eid, {}).get("was_day_before"):
+            return False  # a night never directly follows a day shift, even across the roster boundary
         if shift_type == "night" and idx < len(days_sorted) - 1:
             next_code = codes.get(days_sorted[idx + 1])
             if next_code and is_work_shift_code(next_code):
@@ -380,7 +387,7 @@ def _rebalance_hours(assignments, state, employee_ids, days, driver_by_slot=None
 
 
 def rebalance_medical_hours(assignment_rows, days, cap=SPREAD_CAP_HOURS, max_iterations=20000, mix_exempt=None,
-                             regulation_eligible_ids=None):
+                             regulation_eligible_ids=None, boundary_state=None, no_night_ids=None, no_day_ids=None):
     """
     Final hours-based cleanup pass across the WHOLE medical team (every
     specialty combined, including Regulation-desk shifts) — confirmed
@@ -421,6 +428,10 @@ def rebalance_medical_hours(assignment_rows, days, cap=SPREAD_CAP_HOURS, max_ite
     hours = {eid: sum(_shift_hours(r["code"]) for r in rows.values()) for eid, rows in by_emp_day.items()}
     mix_exempt = mix_exempt or set()
     regulation_eligible_ids = regulation_eligible_ids or set()
+    # People the CP-SAT model never puts on a night (restricted_night_shift) or a day (night_only). This pass moves
+    # shifts afterwards, so it must keep honoring the same restrictions or it hands them the very shift they cannot work.
+    no_night_ids = no_night_ids or set()
+    no_day_ids = no_day_ids or set()
 
     def codes_for(eid):
         return {d: row["code"] for d, row in by_emp_day[eid].items()}
@@ -456,6 +467,9 @@ def rebalance_medical_hours(assignment_rows, days, cap=SPREAD_CAP_HOURS, max_ite
         i = idx - 1
         while i >= 0 and is_work_shift_code(codes.get(days_sorted[i])):
             streak += 1; i -= 1
+        if i < 0:
+            # the run of worked days reaches the first day of this roster: it began before it
+            streak += (boundary_state or {}).get(eid, {}).get("consecutive_before", 0)
         i = idx + 1
         while i < len(days_sorted) and is_work_shift_code(codes.get(days_sorted[i])):
             streak += 1; i += 1
@@ -465,11 +479,17 @@ def rebalance_medical_hours(assignment_rows, days, cap=SPREAD_CAP_HOURS, max_ite
         codes = codes_for(eid)
         if codes.get(d) != "O":
             return False
+        if (shift_type == "night" and eid in no_night_ids) or (shift_type == "day" and eid in no_day_ids):
+            return False
         idx = days_sorted.index(d)
         if idx > 0:
             prev_code = codes.get(days_sorted[idx - 1])
             if prev_code and prev_code.startswith("N") and is_work_shift_code(prev_code):
                 return False
+        elif (boundary_state or {}).get(eid, {}).get("was_night_before"):
+            return False  # worked a night on the last day of the previous roster: day one is the rest day
+        elif shift_type == "night" and (boundary_state or {}).get(eid, {}).get("was_day_before"):
+            return False  # a night never directly follows a day shift, even across the roster boundary
         if shift_type == "night" and idx < len(days_sorted) - 1:
             next_code = codes.get(days_sorted[idx + 1])
             if next_code and is_work_shift_code(next_code):
@@ -626,7 +646,7 @@ def schedule_drivers(drivers, station_ambulance_pairs, leaves, days, starting_ho
     forward from other roster runs already generated this calendar month —
     seeds each driver's hour tally so fairness reflects the whole month, not
     just this run's days.
-    boundary_state: optional {employee_id: {"was_night_before": bool, "consecutive_before": int}}
+    boundary_state: optional {employee_id: {"was_night_before": bool, "was_day_before": bool, "consecutive_before": int}}
     — what this driver was doing the day immediately before `days[0]`, from
     ANY other roster run, so the rest-after-night and max-consecutive-days
     rules extend across the boundary the same way the medical CP-SAT does.
@@ -684,6 +704,8 @@ def schedule_drivers(drivers, station_ambulance_pairs, leaves, days, starting_ho
         if boundary_state.get(d["id"], {}).get("was_night_before"):
             model.Add(work_day[(d["id"], days[0])] == 0)
             model.Add(work_night[(d["id"], days[0])] == 0)
+        if boundary_state.get(d["id"], {}).get("was_day_before"):
+            model.Add(work_night[(d["id"], days[0])] == 0)  # a night never directly follows a day shift
 
     for d in drivers:
         for i in range(len(days) - MAX_CONSECUTIVE_DAYS):
@@ -911,7 +933,7 @@ def schedule_facility_staff(staff, facility, leaves, days, starting_hours=None, 
             # adjacency as Night-then-Day). No boundary-run seed for this
             # one (boundary_state doesn't track "was day before"), same
             # known scope limit as elsewhere in this file.
-            "worked_day_yesterday": False,
+            "worked_day_yesterday": boundary_state.get(e["id"], {}).get("was_day_before", False),
             "hours": starting_hours.get(e["id"], {}).get("total", 0),
             "night_hours": starting_hours.get(e["id"], {}).get("night", 0),
             "weekend_hours": starting_hours.get(e["id"], {}).get("weekend", 0),
@@ -981,7 +1003,7 @@ def schedule_facility_staff(staff, facility, leaves, days, starting_hours=None, 
                 state[eid]["resting"] = False
             state[eid]["worked_day_yesterday"] = eid in day_assigned
 
-    _rebalance_hours(assignments, state, [e["id"] for e in staff], days)
+    _rebalance_hours(assignments, state, [e["id"] for e in staff], days, boundary_state=boundary_state)
 
     total_shifts_by_employee = {e["id"]: state[e["id"]]["total"] for e in staff}
     total_hours_by_employee = {e["id"]: state[e["id"]]["hours"] for e in staff}
@@ -1034,7 +1056,7 @@ def assign_standby(employees, need_day, need_night, leaves, days, worked_assignm
     return result
 
 
-def assign_regulation_nurses(nurses, facility, call_center_committed, leaves, days, worked_assignments):
+def assign_regulation_nurses(nurses, facility, call_center_committed, leaves, days, worked_assignments, boundary_state=None):
     """
     PHTL's contribution to the Regulation desk — fills the gap between what
     Call & Dispatch actually staffed a shift and the desk's target headcount
@@ -1121,6 +1143,10 @@ def assign_regulation_nurses(nurses, facility, call_center_committed, leaves, da
                 prev_code = prev_day and code_by_employee_day.get((eid, prev_day))
                 if prev_code and prev_code[0] == "N":
                     return False  # no shift at all the day after any night, including a previous Regulation night
+                if prev_day is None and (boundary_state or {}).get(eid, {}).get("was_night_before"):
+                    return False  # night on the last day of the previous roster: day one is the rest day
+                if prev_day is None and shift == "night" and (boundary_state or {}).get(eid, {}).get("was_day_before"):
+                    return False  # a night never directly follows a day shift
                 if shift == "night":
                     next_code = next_day and code_by_employee_day.get((eid, next_day))
                     if next_code and is_work_shift_code(next_code):
@@ -1143,6 +1169,23 @@ def assign_regulation_nurses(nurses, facility, call_center_committed, leaves, da
                 # Hard weekly cap, shared with the CP-SAT model — see
                 # MAX_REGULATION_SHIFTS_PER_SPECIALIST's docstring.
                 if nurse_reg_count[eid] >= MAX_REGULATION_SHIFTS_PER_SPECIALIST:
+                    return False
+                # Same MAX_CONSECUTIVE_DAYS limit as everywhere else: this pass used to skip it, so a
+                # Regulation pick could turn two worked days into three. Counts the run of worked days this pick
+                # would join, before and after, including days worked just before this roster began.
+                def worked(i):
+                    c = code_by_employee_day.get((eid, days[i]))
+                    return bool(c) and is_work_shift_code(c)
+                run = 1
+                i = day_idx - 1
+                while i >= 0 and worked(i):
+                    run += 1; i -= 1
+                if i < 0:
+                    run += (boundary_state or {}).get(eid, {}).get("consecutive_before", 0)
+                i = day_idx + 1
+                while i < len(days) and worked(i):
+                    run += 1; i += 1
+                if run > MAX_CONSECUTIVE_DAYS:
                     return False
                 return True
 
@@ -1291,7 +1334,7 @@ def generate_roster(employees, stations, ambulances, leaves, start_date, end_dat
     from other roster runs already generated this calendar month (see main.py's
     _starting_hours_for_month) — both the fairness objective and the overwork
     flags balance against this month-to-date total, not just this run's own days.
-    boundary_state: optional {employee_id: {"was_night_before": bool, "consecutive_before": int}}
+    boundary_state: optional {employee_id: {"was_night_before": bool, "was_day_before": bool, "consecutive_before": int}}
     — what this person was doing the day immediately before start_date, from
     ANY other roster run (see main.py's _boundary_state_for_run). Without this,
     the rest-after-night and max-consecutive-days rules only see days inside
@@ -1420,6 +1463,8 @@ def generate_roster(employees, stations, ambulances, leaves, start_date, end_dat
         if boundary_state.get(e["id"], {}).get("was_night_before"):
             model.Add(work_day[(e["id"], days[0])] == 0)
             model.Add(work_night[(e["id"], days[0])] == 0)
+        if boundary_state.get(e["id"], {}).get("was_day_before"):
+            model.Add(work_night[(e["id"], days[0])] == 0)  # a night never directly follows a day shift
 
     for e in medical:
         for i in range(len(days) - MAX_CONSECUTIVE_DAYS):

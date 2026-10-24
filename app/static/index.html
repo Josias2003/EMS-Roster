@@ -269,7 +269,7 @@
   .nav-footer{padding:12px;border-top:1px solid #4A5257;}
   .nav-footer .who{font-size:13px;color:#B3AEA0;margin-bottom:6px;}
   .nav-footer .who b{font-size:16px;font-weight:600;color:#fff;text-transform:none;}
-  .nav-footer .who .role-pill{background:none;padding:0;border-radius:0;font-size:13px;color:#CFCBBF;letter-spacing:0;}
+  .nav-footer .who .role-pill{background:none;padding:0;border-radius:0;font-size:13px;color:#CFCBBF;letter-spacing:0;text-transform:none;}
   .nav-footer .btn.ghost{justify-content:flex-start;min-height:44px;padding:0;border:none;background:none;color:#fff;font-size:16px;text-decoration:underline;text-decoration-color:#B3AEA0;text-underline-offset:4px;}
   .nav-footer .btn.ghost:hover{background:none;text-decoration-color:#fff;}
   .nav-footer #manual-btn{margin-bottom:2px;}
@@ -785,7 +785,8 @@ function showApp(){
   manualIcon.innerHTML = "";
   manualIcon.appendChild(icon("manual", 15));
   document.getElementById("nav-username").textContent = STATE.username || "";
-  document.getElementById("nav-role").textContent = (STATE.role || "").replace(/_/g," ");
+  const ROLE_LABELS = {admin:"Administrator", drivers_manager:"Drivers Manager", phtl:"PHTL", call_center_tl:"Call Center Team Leader"};
+  document.getElementById("nav-role").textContent = ROLE_LABELS[STATE.role] || (STATE.role || "").replace(/_/g," ");
   renderNav();
   const allowed = NAV_BY_ROLE[STATE.role] || ["dashboard"];
   setTab(allowed.includes(STATE.tab) ? STATE.tab : allowed[0]);
