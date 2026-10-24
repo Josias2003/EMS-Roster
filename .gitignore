@@ -28,3 +28,7 @@ venv/
 # Local tooling (machine-specific, not project config)
 .claude/
 .vscode/
+
+# Handover documents name infrastructure identifiers; keep them out of the public repo
+SAMU-Roster-*.pdf
+HANDOVER.md
